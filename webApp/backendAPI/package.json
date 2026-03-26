@@ -1,0 +1,11 @@
+{
+  "name": "ledbox-backend-api-tests",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "test": "node test/run_tests.js"
+  },
+  "dependencies": {
+    "express": "^5.2.1"
+  }
+}

@@ -1,0 +1,18 @@
+# Gpio
+SYNC_PIN=22
+CALIBRATE_PIN=23
+EDGE=falling
+DEBOUNCE_MS=200
+SYNC_CMD=/home/magodi12/ledProject/sync_cmd.sh
+CALIBRATE_CMD=/home/magodi12/ledProject/calibrate_cmd.sh
+
+#Sync video
+SYNC_CMD=/home/magodi12/ledProject/sync_cmd.sh 
+LED_SYNC_STATUS_FILE=/run/ledbox/ledSyncVideo_status.json 
+
+#API
+BASE_DIR=/home/magodi12/ledProject/backendAPI
+CONFIG_FILENAME=config.json
+LEDSYNCVIDEO_STATUS_FILE=/run/ledbox/ledSyncVideo_status.json
+CALIBRATE_STATUS_FILE=/run/ledbox/calibrate_status.json
+

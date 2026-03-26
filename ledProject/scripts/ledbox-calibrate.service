@@ -1,0 +1,12 @@
+[Unit]
+Description=Service that runs calibrate, that allows the status of the program to be tracked.
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/home/magodi12/ledProject/calibrate --run-once
+EnvironmentFile=/etc/default/ledbox
+RemainAfterExit=no
+
+[Install]
+WantedBy=multi-user.target

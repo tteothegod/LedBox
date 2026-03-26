@@ -1,0 +1,13 @@
+[Unit]
+Description=Service that runs ledSyncVideo, that allows the status of the program to be tracked.
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/node /home/magodi12/ledProject/scripts/ledSyncVideo-wrapper.js --run-once
+WorkingDirectory=/home/magodi12/ledProject
+EnvironmentFile=/etc/default/ledbox
+RemainAfterExit=no
+
+[Install]
+WantedBy=multi-user.target

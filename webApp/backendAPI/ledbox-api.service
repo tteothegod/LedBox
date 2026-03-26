@@ -1,0 +1,16 @@
+[Unit]
+Description=ledProject REST API
+After=network.target
+
+[Service]
+User=magodi12
+Group=magodi12
+EnvironmentFile=/etc/default/ledbox
+WorkingDirectory=/home/pi/ledProject
+ExecStart=/usr/bin/node /home/pi/ledProject/webApp/backendAPI/index.js
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target

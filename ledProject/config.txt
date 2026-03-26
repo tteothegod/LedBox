@@ -1,0 +1,26 @@
+# LedBox Configuration File
+
+# Total number of LEDs in the strip
+LED_COUNT=210
+
+# Power Supply MAX Amperage (Amps)
+MAX_AMPERAGE=10
+
+# Power Supply Voltage (V)
+SUPPLY_VOLTAGE=12V
+
+# Brightness of the LEDs (0-255)
+BRIGHTNESS=255
+
+# Corner LED indices (0-indexed)
+# This defines the end of each side of the rectangle.
+# Top side runs from LED 0 to 64.
+# Right side runs from LED 65 to 104.
+# Bottom side runs from LED 105 to 169.
+# Left side runs from LED 170 to 209.
+CORNER_LED_LAYOUT=0,65,103,169
+
+# Frame processing parameters
+BORDER_PERCENT=0.25
+RESIZE_FACTOR=0.25
+SALIENCY_FACTOR=0.50
