@@ -1,2 +1,2 @@
 echo "Starting LED sync..."
-sudo systemctl start ledbox-ledSyncVideo.service
+systemctl start ledbox-ledSyncVideo.service
