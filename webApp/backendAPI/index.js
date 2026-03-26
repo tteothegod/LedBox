@@ -17,6 +17,8 @@ const CONFIG_FILENAME = process.env.CONFIG_FILENAME || 'config.txt';
 // Path to the runtime metadata produced by the ledbox service
 const LEDSYNCVIDEO_STATUS_FILE = process.env.LEDSYNCVIDEO_STATUS_FILE || '/run/ledbox/ledSyncVideo_status.json';
 // const CALIBRATE_STATUS_FILE = process.env.CALIBRATE_STATUS_FILE || '/run/ledbox/calibrate_status.json';
+const CALIBRATE_STATUS_FILE = process.env.CALIBRATE_STATUS_FILE || '/run/ledbox/calibrate_status.json';
+const LATEST_SCREENSHOT_FILE = process.env.LATEST_SCREENSHOT_FILE || path.join(BASE_DIR, 'latestImg.jpg');
 
 // Server start timestamp for status endpoint
 const SERVER_STARTED_AT = new Date().toISOString();
@@ -24,6 +26,18 @@ const SERVER_STARTED_AT = new Date().toISOString();
 // Helper to prevent path traversal: resolves and ensures it stays inside BASE_DIR
 function safeResolve(relPath) {
   const resolved = path.resolve(BASE_DIR, relPath);
+  if (!resolved.startsWith(BASE_DIR)) {
+    const err = new Error('Invalid path');
+    err.status = 400;
+    throw err;
+  }
+  return resolved;
+}
+
+// Resolve a candidate path that may be absolute or relative, but ensure
+// the final resolved path is inside `BASE_DIR` to prevent traversal.
+function resolveWithinBase(candidate) {
+  const resolved = path.isAbsolute(candidate) ? path.resolve(candidate) : path.resolve(BASE_DIR, candidate);
   if (!resolved.startsWith(BASE_DIR)) {
     const err = new Error('Invalid path');
     err.status = 400;
@@ -134,25 +148,9 @@ app.post('/api/control/sync', async (req, res, next) => {
 // GET /api/screenshot?filename=... -> serve screenshot file or latest image
 app.get('/api/screenshot', async (req, res, next) => {
   try {
-    let filePath;
-    if (req.query.filename) {
-      filePath = safeResolve(req.query.filename);
-      if (!fsSync.existsSync(filePath)) return res.status(404).send('file not found');
-    } else {
-      const files = await fs.readdir(BASE_DIR);
-      const images = files.filter(f => /\.(png|jpe?g)$/i.test(f));
-      if (!images.length) return res.status(404).send('no screenshots found');
-      let newest = null;
-      let newestTime = 0;
-      for (const f of images) {
-        const stat = await fs.stat(path.join(BASE_DIR, f));
-        if (stat.mtimeMs > newestTime) {
-          newestTime = stat.mtimeMs;
-          newest = f;
-        }
-      }
-      filePath = safeResolve(newest);
-    }
+    // Serve only the configured latest screenshot file. Do not accept arbitrary filenames.
+    const filePath = resolveWithinBase(LATEST_SCREENSHOT_FILE);
+    if (!fsSync.existsSync(filePath)) return res.status(404).send('no screenshots found');
     res.sendFile(filePath);
   } catch (err) {
     next(err);

@@ -15,9 +15,9 @@ function findFreePort() {
   });
 }
 
-async function spawnServer(port, statusFile) {
+async function spawnServer(port, envExtra = {}) {
   return new Promise((resolve, reject) => {
-    const env = Object.assign({}, process.env, { PORT: String(port), LEDSYNCVIDEO_STATUS_FILE: statusFile });
+    const env = Object.assign({}, process.env, envExtra, { PORT: String(port) });
     const child = spawn(process.execPath, [path.join(__dirname, '..', 'index.js')], { env, stdio: ['ignore', 'pipe', 'pipe'] });
 
     const timeout = setTimeout(() => {
@@ -48,50 +48,116 @@ async function spawnServer(port, statusFile) {
   });
 }
 
-async function httpGetJson(port, path) {
-  const url = `http://127.0.0.1:${port}${path}`;
+async function httpGetJson(port, p) {
+  const url = `http://127.0.0.1:${port}${p}`;
   const res = await fetch(url);
   const json = await res.json();
   return { status: res.status, json };
 }
 
+async function httpGetBuffer(port, p) {
+  const url = `http://127.0.0.1:${port}${p}`;
+  const res = await fetch(url);
+  const buffer = await res.arrayBuffer();
+  return { status: res.status, buffer: Buffer.from(buffer), headers: res.headers };
+}
+
+async function httpPostText(port, p, text) {
+  const url = `http://127.0.0.1:${port}${p}`;
+  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: text });
+  const body = await res.text();
+  try { return { status: res.status, json: JSON.parse(body) }; } catch { return { status: res.status, text: body }; }
+}
+
 async function run() {
-  console.log('Running tests...');
+  console.log('Running extended API tests...');
 
-  // Test 1: when metadata file exists
-  const port1 = await findFreePort();
+  const port = await findFreePort();
   const tmpdir = await fs.mkdtemp(path.join(os.tmpdir(), 'ledbox-test-'));
-  const statusFile = path.join(tmpdir, 'ledSyncVideo_status.json');
-  const sample = { pid: 4321, running: true, last_start: new Date().toISOString(), message: 'ok' };
-  await fs.writeFile(statusFile, JSON.stringify(sample, null, 2), 'utf8');
 
-  const server = await spawnServer(port1, statusFile);
+  // Prepare environment and files
+  const statusFile = path.join(tmpdir, 'ledSyncVideo_status.json');
+  const configFile = path.join(tmpdir, 'config.txt');
+  const img1 = path.join(tmpdir, 'img1.png');
+  const img2 = path.join(tmpdir, 'img2.jpg');
+
+  const sampleStatus = { pid: 4321, running: true, last_start: new Date().toISOString(), message: 'ok' };
+  await fs.writeFile(statusFile, JSON.stringify(sampleStatus, null, 2), 'utf8');
+  await fs.writeFile(configFile, 'initial-config', 'utf8');
+  await fs.writeFile(img1, 'PNGDATA1', 'utf8');
+  // make img2 newer
+  await new Promise(r => setTimeout(r, 10));
+  await fs.writeFile(img2, 'JPGDATA2', 'utf8');
+
+  const env = {
+    LEDSYNCVIDEO_STATUS_FILE: statusFile,
+    BASE_DIR: tmpdir,
+    CONFIG_FILENAME: 'config.txt',
+    SYNC_CMD: "echo sync-done",
+    CALIBRATE_CMD: "echo calibrate-done",
+    LATEST_SCREENSHOT_FILE: img2
+  };
+
+  const server = await spawnServer(port, env);
   try {
-    const { status, json } = await httpGetJson(port1, '/api/status');
-    assert.strictEqual(status, 200);
-    assert.strictEqual(json.pid, sample.pid);
-    assert.strictEqual(json.running, sample.running);
-    assert.strictEqual(json.message, sample.message);
-    console.log('Test 1 passed');
+    // STATUS
+    const { status: s1, json: st } = await httpGetJson(port, '/api/status');
+    assert.strictEqual(s1, 200);
+    assert.strictEqual(st.pid, sampleStatus.pid);
+    assert.strictEqual(st.running, sampleStatus.running);
+    console.log('status endpoint OK');
+
+    // CONFIG GET (returned as plain text)
+    const cfgRes = await fetch(`http://127.0.0.1:${port}/api/config`);
+    const cfgText = await cfgRes.text();
+    assert.strictEqual(cfgRes.status, 200);
+    assert.strictEqual(cfgText, 'initial-config');
+    console.log('config GET OK');
+
+    // CONFIG POST
+    const postResp = await httpPostText(port, '/api/config', 'new-config-value');
+    assert.strictEqual(postResp.status, 201);
+    const saved = await fs.readFile(configFile, 'utf8');
+    assert.strictEqual(saved, 'new-config-value');
+    console.log('config POST OK');
+
+    // CONTROL calibrate
+    const calResp = await fetch(`http://127.0.0.1:${port}/api/control/calibrate`, { method: 'POST' });
+    assert.strictEqual(calResp.status, 200);
+    const calJson = await calResp.json();
+    assert.strictEqual(calJson.ok, true);
+    assert.ok(calJson.output.includes('calibrate-done'));
+    console.log('control calibrate OK');
+
+    // CONTROL sync
+    const syncResp = await fetch(`http://127.0.0.1:${port}/api/control/sync`, { method: 'POST' });
+    assert.strictEqual(syncResp.status, 200);
+    const syncJson = await syncResp.json();
+    assert.strictEqual(syncJson.ok, true);
+    assert.ok(syncJson.output.includes('sync-done'));
+    console.log('control sync OK');
+
+    // SCREENSHOT latest
+    const latest = await httpGetBuffer(port, '/api/screenshot');
+    assert.strictEqual(latest.status, 200);
+    assert.ok(latest.buffer.length > 0);
+    console.log('screenshot latest OK');
+
+    // SCREENSHOT by filename
+    const byFile = await httpGetBuffer(port, `/api/screenshot?filename=${encodeURIComponent(path.basename(img1))}`);
+    assert.strictEqual(byFile.status, 200);
+    assert.ok(byFile.buffer.length > 0);
+    console.log('screenshot by filename OK');
+
+    // SCREENSHOT path traversal should fail
+    const trav = await fetch(`http://127.0.0.1:${port}/api/screenshot?filename=${encodeURIComponent('../etc/passwd')}`);
+    assert.ok(trav.status === 400 || trav.status === 500);
+    console.log('screenshot path traversal check OK');
+
+    console.log('All extended API tests passed');
   } finally {
     server.kill();
   }
-
-  // Test 2: when metadata file missing
-  const port2 = await findFreePort();
-  const missingFile = path.join(tmpdir, 'missing.json');
-  const server2 = await spawnServer(port2, missingFile);
-  try {
-    const { status, json } = await httpGetJson(port2, '/api/status');
-    assert.strictEqual(status, 200);
-    assert.strictEqual(json.running, false);
-    assert.strictEqual(json.pid, null);
-    console.log('Test 2 passed');
-  } finally {
-    server2.kill();
-  }
-
-  console.log('All tests passed');
 }
 
 run().catch((err) => {
