@@ -57,7 +57,56 @@ cv::Vec3b meanBGR_u8(const cv::Mat& roi) {
     );
 }
 
-int ledSyncVideo() {
+cv::Mat generateLedPreview(const cv::Mat& small_frame, const std::vector<cv::Vec3b>& colors, int frameWidth, int frameHeight, int ledsTop, int ledsRight, int ledsBottom, int ledsLeft) {
+    constexpr float paddingFactor = 0.1;
+    int sidePadding= std::round(smallFrameWidth * paddingFactor);
+    int topPadding = std::round(smallFrameHeight * paddingFactor);
+
+    int previewFrameWidth = smallFrameWidth + sidePadding;
+    int previewFrameHeight = smallFrameHeight + topPadding;
+    cv::Mat preview(previewFrameWidth, previewFrameHeight, CV_8UC3);
+
+    float topIdealPixel = smallFrameWidth / ledsTop;
+    float rightIdealPixel = smallFrameHeight / ledsRight;
+    float bottomIdealPixel = smallFrameWidth / ledsBottom;
+    float leftIdealPixel = smallFrameWidth / ledsLeft;
+
+    for(int i = 0; i < ledsTop; ++i) { // For every top led
+        int x0 = std::clamp((int)std::round(sidePadding + i * topIdealPixel), 0, previewFrameWidth);
+        int x1 = std::clamp((int)std::round(sidePadding + (i + 1) * topIdealPixel), 0, previewFrameWidth); 
+        cv::Rectangle(preview, x0, x1, 0, topPadding, colors[i]); // formatted at x0 x1 y0 y1, (RGB)
+    }
+    for(int i = 0; i < ledsRight; ++i) {
+        int y0 = std::clamp((int)std::round(topPadding + i * rightIdealPixel), 0, previewFrameHeight);
+        int y1 = std::clamp((int)std::round(topPadding + (i + 1) * rightIdealPixel), 0, previewFrameHeight); 
+        int x0 = std::max(0, previewFrameWidth - sidePadding);
+        cv::Rectangle(preview, x0, previewFrameWidth, y0, y1, colors[ledsTop + i]); // TODO: review bounds are correct to avoid seg fault
+    }
+    for(int i = 0; i < ledsBottom; ++i) {
+        int x0 = std::clamp((int)std::round(previewFrameWidth - (i + 1) * bottomIdealPixel - sidePadding), 0, previewFrameWidth);
+        int x1 = std::clamp((int)std::round(previewFrameWidth - i * bottomIdealPixel - sidePadding), 0, previewFrameWidth);
+        if (x1 < x0) std::swap(x1, x0);
+        int y0 = std::max(0, previewFrameHeight - topPadding);
+        cv::Rectangle(preview, x0, x1, y0, previewFrameHeight, colors[ledsTop + ledsRight + i]); // formatted at x0 x1 y0 y1, (RGB) are correct to avoid seg fault
+    }
+    for(int i = 0; i < ledsLeft; ++i) {
+        int y0 = std::clamp((int)std::round(previewFrameHeight - (i + 1) * leftIdealAmt - topPadding), 0, previewFrameHeight);
+        int y1 = std::clamp((int)std::round(previewFrameHeight - i * leftIdealAmt - topPadding), 0, previewFrameHeight);
+        if (y1 < y0) std::swap(y1, y0);
+        cv::Rectangle(preview, 0, sidePadding, y0, y1, colors[ledsTop + ledsRight + ledsBottom + i]); // formatted at x0 x1 y0 y1, (RGB) are correct to avoid seg fault
+    }
+
+    cv::Mat smallFrameRGB;
+    cv::cvtColor(small_frame, smallFrameRGB, cv::COLOR_BGR2RGB);
+    cv::Rect roi(sidePadding, topPadding, smallFrameWidth, smallFrameHeight);
+    smallFrameRGB.copyTo(preview(roi));
+    return preview;
+}
+
+int ledSyncVideo(bool savePicture) {
+
+    // TODO: Figure out a better way of doing this
+    int frameCounter = 1;
 
     std::cout << "Running main led sync video program..." << std::endl;
     SetupParameters params;
@@ -156,6 +205,8 @@ int ledSyncVideo() {
             std::cout << "Video frame unavailable ending program...";
             break; // Break if looping also fails
         }
+        frameCounter++; // Increment the frame counter
+
         // Resize frame to 25% of original size using INTER_AREA for fast anti-aliased downsampling
         cv::Mat small_frame;
         cv::resize(frame, small_frame, cv::Size(), resize_factor, resize_factor, cv::INTER_AREA);
@@ -257,9 +308,11 @@ int ledSyncVideo() {
                 colors[i] = meanBGR_u8(roi_frame);
             }
         }
-        // // --- Visualization of Calculated LED Colors ---
-        // showLedPreview(small_frame, colors, smallFrameWidth, smallFrameHeight, leds_horizontal, leds_vertical, topIdealPixelAmt, sideIdealPixelAmt);
-        // ----------------------------------------------
+        if(savePicture && frameCounter % 31 == 0) { // Every 30 frames
+            frameCounter = 1;
+            cv::Mat preview = generateLedPreview(small_frame, colors, smallFrameWidth, smallFrameHeight, ledsTop, ledsRight, ledsBottom, ledsLeft);
+            cv::imwrite("preview.jpg", preview);
+        }
 
         std::vector<cv::Vec3b> stripColors = transformIdealToStripVec(colors, layout);
         strip.updateStripWithGamma(transformIdealToStripVec(colors, layout));
@@ -269,9 +322,16 @@ int ledSyncVideo() {
     return 0;
 }
 
-int main() {
+int main(int argc, char* argv[]) {
     try {
-        return ledSyncVideo();
+        bool savePicture = false;
+        if(argc > 0) {
+            std::string arg1(argv[1]);
+            if(arg1 == "--save-picture") {
+                savePicture = true;
+            }
+        } 
+        return ledSyncVideo(savePicture);
     } catch (const std::exception& e) {
         std::cerr << "Unhandled exception: " << e.what() << std::endl;
         return 1;

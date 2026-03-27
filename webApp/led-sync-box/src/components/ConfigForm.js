@@ -28,8 +28,10 @@ export default function ConfigForm(){
 
   async function load(){
     try{
-      const t = await fetchConfig(); setRaw(t); setDirty(false);
-    }catch(e){ setRaw('# failed to load config'); }
+      const t = await fetchConfig(); 
+      setRaw(t); 
+      setDirty(false);
+    }catch(e){ setRaw('# failed to load config: ' + e.message); }
   }
 
   useEffect(()=>{ load(); }, []);
@@ -60,9 +62,9 @@ export default function ConfigForm(){
       <div className="muted">Edit `config.txt` settings below. Click Save to write to disk (backend required).</div>
       <textarea value={raw} onChange={e=>{setRaw(e.target.value); setDirty(true)}} rows={12} />
       <div className="form-row">
-        <button className="btn" onClick={onSave} disabled={!dirty || saving}>{saving? 'Saving…' : 'Save Config'}</button>
-        <button className="btn outline" onClick={load}>Reload</button>
-        <button className="btn small" onClick={autoTune}>Auto Adjust Brightness</button>
+        <button className="btn" onClick={load}>Reload</button>
+        <button className="btn outline" onClick={onSave} disabled={!dirty || saving}>{saving? 'Saving…' : 'Save Config'}</button>
+        <button className="btn outline" onClick={autoTune}>Auto Adjust Brightness</button>
       </div>
       <div className="note muted">Tip: Backend endpoint POST /api/config expects raw file text.</div>
     </div>

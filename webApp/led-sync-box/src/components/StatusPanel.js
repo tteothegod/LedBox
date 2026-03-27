@@ -27,9 +27,9 @@ export default function StatusPanel(){
           <div className="status-row"><strong>Message:</strong> <span className="muted">{status.message}</span></div>
 
           <div className="actions">
-            <button onClick={async()=>{ await triggerSync(); load(); }} className="btn">Trigger Sync</button>
-            <button onClick={async()=>{ await triggerCalibrate(); load(); }} className="btn outline">Run Calibrate</button>
             <button onClick={load} className="btn small">Refresh</button>
+            <button onClick={async()=>{ await triggerSync(); load(); }} className="btn outline">Trigger Sync</button>
+            <button onClick={async()=>{ await triggerCalibrate(); load(); }} className="btn outline">Run Calibrate</button>
           </div>
         </div>
       )}

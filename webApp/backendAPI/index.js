@@ -145,7 +145,7 @@ app.post('/api/control/sync', async (req, res, next) => {
   }
 });
 
-// GET /api/screenshot?filename=... -> serve screenshot file or latest image
+// GET /api/screenshot -> serve screenshot file or latest image
 app.get('/api/screenshot', async (req, res, next) => {
   try {
     // Serve only the configured latest screenshot file. Do not accept arbitrary filenames.

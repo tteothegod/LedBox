@@ -12,8 +12,16 @@ export async function fetchStatus(){
 
 export async function fetchConfig(){
   const res = await fetch(root + '/api/config');
-  if(!res.ok) throw new Error('fetch config');
-  return await res.text();
+  if (!res.ok) throw new Error('fetch config');
+  const ct = (res.headers.get('content-type') || '').toLowerCase();
+  // Only accept plain text or JSON for config; reject HTML pages (error pages)
+  if (!(ct.startsWith('text/plain') || ct.includes('application/json'))) {
+    throw new Error(`Unexpected content-type: ${ct || 'none'}`);
+  }
+  const body = await res.text();
+  // very basic heuristic to detect HTML error pages
+  if (/<(html|!doctype)/i.test(body)) throw new Error('Response appears to be HTML');
+  return body;
 }
 
 export async function saveConfig(text){
@@ -28,4 +36,17 @@ export async function triggerCalibrate(){
 
 export async function triggerSync(){
   await fetch(root + '/api/control/sync', {method:'POST'});
+}
+
+export async function fetchScreenshot(ts) {
+  const tsLine = ts ? `?ts=${encodeURIComponent(ts)}` : '';
+  const res = await fetch(root + '/api/screenshot' + tsLine);
+  if (!res.ok) {
+    throw new Error(`network (${res.status})`);
+  }
+  const blob = await res.blob();
+  if (!blob.type || !blob.type.startsWith('image/')) {
+    throw new Error('Response is not an image');
+  }
+  return blob;
 }
