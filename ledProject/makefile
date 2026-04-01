@@ -1,8 +1,15 @@
 CC = g++
+# Compiler flags (no linker flags here)
 FLAGS = -Ofast -march=native -Wall
 
-# Base libraries for the LED lights
-LIBS = -L~/rpi_ws281x -I~/rpi_ws281x -lws2811 -lwiringPi pkg-config --cflags --libs opencv4 -lopencv_saliency
+# rpi ws281x directory
+RPI_WS281X_DIR = $(HOME)/rpi_ws281x
+
+# Use pkg-config to get OpenCV flags correctly
+OPENCV_FLAGS = $(shell pkg-config --cflags --libs opencv4)
+
+# Base libraries for the LED lights and OpenCV
+LIBS = -L$(RPI_WS281X_DIR) -lws2811 -lwiringPi -lopencv_saliency $(OPENCV_FLAGS)
 
 # --- Target Definitions ---
 TARGET_LSV = ledSyncVideo
@@ -34,7 +41,7 @@ $(TARGET_CALIBRATE): $(OBJ_CALIBRATE) $(OBJ_COMMON)
 
 # Generic rule to compile .cpp files into .o object files
 %.o: %.cpp
-	$(CC) $(FLAGS) -c $< -o $@ $(LIBS)
+	$(CC) $(FLAGS) $(OPENCV_FLAGS) -I$(RPI_WS281X_DIR) -c $< -o $@
 
 # --- Run and Clean Commands ---
 run-lsv: $(TARGET_LSV)
@@ -44,4 +51,4 @@ run-calibrate: $(TARGET_CALIBRATE)
 	./$(TARGET_CALIBRATE)
 
 clean:
-	rm -f $(TARGET_APP) $(TARGET_LSV) $(TARGET_CALIBRATE) *.o
+	rm -f $(TARGET_LSV) $(TARGET_CALIBRATE) *.o
