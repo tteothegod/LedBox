@@ -3,7 +3,12 @@ const path = require('path');
 const fs = require('fs').promises;
 
 const SYNC_CMD = process.env.SYNC_CMD || '/home/magodi12/ledProject/sync_cmd.sh';
+const LED_SYNC_VIDEO_CMD = process.env.LED_SYNC_VIDEO_CMD || '/home/magodi12/LedBox/ledProject/ledSyncVideo';
+const BASE_DIR = process.env.BASE_DIR || '/home/magodi12/LedBox/ledProject';
 const STATUS_FILE = process.env.LED_SYNC_STATUS_FILE || '/run/ledbox/ledSyncVideo_status.json';
+
+// Declare child at the top level so signal handlers can access it!
+let child = null;
 
 // Safety: ensure absolute path
 if (!SYNC_CMD || !path.isAbsolute(SYNC_CMD)) {
@@ -32,12 +37,16 @@ async function writeStatus(status) {
 async function runSyncCmd() {
   const startTime = new Date();
   const startIso = startTime.toISOString();
-  console.log(`${startIso} - Starting LED Sync Video, executing ${SYNC_CMD}`);
+  console.log(`${startIso} - Starting LED Sync Video, executing ${LED_SYNC_VIDEO_CMD}`);
 
-  let child;
   try {
     // spawn the process; execFile returns a ChildProcess that contains .pid and streams
-    child = execFile(SYNC_CMD, { cwd: path.dirname(SYNC_CMD) });
+    // We assign it to the globally scoped `child` variable here
+    child = execFile(LED_SYNC_VIDEO_CMD, ['--save-picture'], { cwd: BASE_DIR }, (err, stdout, stderr) => {
+      if (err) {
+        console.error('LED Sync Video process error:', err);
+      }
+    });
 
   } catch (spawnErr) {
     // execFile can throw synchronously in rare cases
@@ -102,6 +111,26 @@ async function runSyncCmd() {
     });
   });
 }
+
+// Systemd sends SIGTERM when it stops the service
+process.on('SIGTERM', () => {
+  console.log('Received SIGTERM from systemd, stopping child process...');
+  if (child) {
+    child.kill('SIGTERM');
+  } else {
+    process.exit(0);
+  }
+});
+
+// User sends SIGINT when they press Ctrl+C in terminal
+process.on('SIGINT', () => {
+  console.log('Received SIGINT, stopping child process...');
+  if (child) {
+    child.kill('SIGINT');
+  } else {
+    process.exit(0);
+  }
+});
 
 // Run immediately on start
 runSyncCmd().catch(err => {

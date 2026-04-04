@@ -10,11 +10,11 @@ LEDStrip::LEDStrip(int count, int gpio_pin, int dmanum, int brightness) {
     ledstring.channel[0].gpionum = gpio_pin;
     ledstring.channel[0].invert = 0;
     ledstring.channel[0].count = count;
-    ledstring.channel[0].strip_type = WS2811_STRIP_GRB;
+    ledstring.channel[0].strip_type = WS2811_STRIP_BRG;
     ledstring.channel[0].brightness = brightness;
 
 
-    previousValues = std::vector<cv::Vec3b>(count, 0);
+    previousColor = std::vector<cv::Vec3b>(count, cv::Vec3b(0,0,0));
     temporalAlpha = 0.25;
 }
 
@@ -62,43 +62,59 @@ void LEDStrip::setPixel(int idx, uint32_t color) {
     }
 }
 
-float temporalSmooth(float valueNew, flaot valueOld) {
+float LEDStrip::temporalSmooth(float valueNew, float valueOld) {
     return valueNew * temporalAlpha + (1-temporalAlpha) * valueOld;
 }
 
-void LEDStrip::updateStrip(const std::vector<uint32_t>& colors, bool temporalSmoothOn = 1) {
+void LEDStrip::updateStrip(const std::vector<cv::Vec3b>& colors, bool temporalSmoothOn) {
     for (size_t i = 0; i < colors.size() && i < (size_t)ledstring.channel[0].count; ++i) {
-        // Assuming BGR color from OpenCV
-        cv::Vec3b newColor = colors[i];
-        if(temporalSmoothOn) {
-            cv::Vec3b& prevColor = previousColors[i];
-            ledstring.channel[0].leds[i] = temporalSmooth(newColor[2], prevColor[2]) | temporalSmooth(newColor[1], prevColor[1]) << 8| temporalSmooth(newColor[0], prevColor[0]) << 16;
+        // colors are BGR (OpenCV)
+        const cv::Vec3b& newColor = colors[i];
+        cv::Vec3b& prevColor = previousColor[i];
+
+        uint8_t outR, outG, outB;
+        if (temporalSmoothOn) {
+            outR = static_cast<uint8_t>(std::round(temporalSmooth(newColor[2], prevColor[2])));
+            outG = static_cast<uint8_t>(std::round(temporalSmooth(newColor[1], prevColor[1])));
+            outB = static_cast<uint8_t>(std::round(temporalSmooth(newColor[0], prevColor[0])));
         } else {
-            ledstring.channel[0].leds[i] = newColor[2] | newColor[1] << 8| newColor[0] << 16;
+            outR = newColor[2];
+            outG = newColor[1];
+            outB = newColor[0];
         }
-        previousColor = newColor;    
+
+        ledstring.channel[0].leds[i] = ((uint32_t)outR << 16) | ((uint32_t)outG << 8) | (uint32_t)outB;
+        prevColor = cv::Vec3b(outB, outG, outR);
     }
 }
 
-void LEDStrip::updateStripWithGamma(std::vector<cv::Vec3b> colors, bool temporalSmoothOn = 1) {
+void LEDStrip::updateStripWithGamma(const std::vector<cv::Vec3b>& colors, bool temporalSmoothOn) {
     for (size_t i = 0; i < colors.size() && i < (size_t)ledstring.channel[0].count; ++i) {
-        // Assuming BGR color from OpenCV
-        uint8_t newB = (uint8_t) gamma8[colors[i][0]];
-        uint8_t newG = (uint8_t) gamma8[colors[i][1]];
-        uint8_t newR = (uint8_t) gamma8[colors[i][2]];
-        if(temporalSmoothOn) {
-            cv::Vec3b& prevColor = previousColors[i];
-            ledstring.channel[0].leds[i] = temporalSmooth(newR, prevColor[2]) | temporalSmooth(newG, prevColor[1]) << 8| temporalSmooth(newB, prevColor[0]) << 16;
+        uint8_t newB = gamma8[colors[i][0]];
+        uint8_t newG = gamma8[colors[i][1]];
+        uint8_t newR = gamma8[colors[i][2]];
+
+        cv::Vec3b& prevColor = previousColor[i];
+
+        uint8_t outR, outG, outB;
+        if (temporalSmoothOn) {
+            outR = static_cast<uint8_t>(std::round(temporalSmooth(newR, prevColor[2])));
+            outG = static_cast<uint8_t>(std::round(temporalSmooth(newG, prevColor[1])));
+            outB = static_cast<uint8_t>(std::round(temporalSmooth(newB, prevColor[0])));
         } else {
-            ledstring.channel[0].leds[i] = newR | newG << 8| newB << 16;
+            outR = newR;
+            outG = newG;
+            outB = newB;
         }
-        previousColor = cv::Vec3b(newR, newG, newB);
+
+        ledstring.channel[0].leds[i] = ((uint32_t)outR << 16) | ((uint32_t)outG << 8) | (uint32_t)outB;
+        previousColor[i] = cv::Vec3b(outB, outG, outR);
     }
 }
 
 void LEDStrip::setBrightness(int brightness) {
     if(brightness < 0 || brightness > 255) {
-        std::cerr << "WARNING: Attempted to set light strip to a negative value or to a value larger than 255" << std::end;
+        std::cerr << "WARNING: Attempted to set light strip to a negative value or to a value larger than 255" << std::endl;
     }
     ledstring.channel[0].brightness = brightness;
     return;
@@ -116,12 +132,13 @@ int LEDStrip::getBrightness() const {
     return ledstring.channel[0].brightness;
 }
 
-void calibrateBrightness(float maxAmperage, float supplyVoltage) {
+void LEDStrip::calibrateBrightness(float maxAmperage, float supplyVoltage) {
     float maxWattsSupplied = maxAmperage * supplyVoltage;
-    float maxWattsPulled = count * wattsPerPixel;
-    float brightnessFactor = std::min(maxWattsSupplied / maxWattsPulled, 1);
-    setBrightness((int) std::round(brightnessFactor * 255));
+    float maxWattsPulled = this->size() * wattsPerPixel;
+    float brightnessFactor = std::min(maxWattsSupplied / maxWattsPulled, 1.0f);
+    setBrightness(static_cast<int>(std::round(brightnessFactor * 255)));
 }
+
 
 
 const uint8_t LEDStrip::gamma8[] = {

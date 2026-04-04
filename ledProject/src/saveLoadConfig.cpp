@@ -76,3 +76,41 @@ int loadConfig(SetupParameters& params, const std::string& path) {
     }
     return 1; // Return 1 to indicate that we attempted to load the config
 }
+
+int saveConfig(SetupParameters& params, const std::string& path) {
+    std::cout << "Saving config to " << path << "..." << std::endl;
+    std::ofstream configFile(path);
+    if (!configFile.is_open()) {
+        std::cerr << "Error: Could not open " << path << " for writing." << std::endl;
+        return 0;
+    }
+
+    configFile << "STRIP_LENGTH=" << params.getLength() << "\n";
+    configFile << "LED_DENSITY=" << params.getDensity() << "\n";
+    configFile << "LED_COUNT=" << params.getLEDCount() << "\n";
+    configFile << "BRIGHTNESS=" << params.getBrightness() << "\n";
+
+    // Handle the layout array
+    // Note: Depends on whether getCornerLEDLayout() is const qualified. If not, this might need adjustment in the header.
+    auto corners = params.getCornerLEDLayout();
+    if (corners) {
+        configFile << "CORNER_LED_LAYOUT=" << corners[0] << "," << corners[1] << "," 
+                   << corners[2] << "," << corners[3] << "\n";
+    }
+
+    // Write advanced image processing/hardware limits
+    configFile << "BORDER_PERCENT=" << params.getBorderPercent() << "\n";
+    configFile << "RESIZE_FACTOR=" << params.getResizeFactor() << "\n";
+    configFile << "SALIENCY_FACTOR=" << params.getSaliencyFactor() << "\n";
+    configFile << "MAX_AMPERAGE=" << params.getMaxAmperage() << "\n";
+    configFile << "SUPPLY_VOLTAGE=" << params.getSupplyVoltage() << "\n";
+
+    configFile.close();
+    
+    if (configFile.fail()) {
+        std::cerr << "Error: Failed while writing to " << path << "." << std::endl;
+        return 0;
+    }
+    
+    return 1;
+}

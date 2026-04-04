@@ -25,11 +25,13 @@ public:
     void show();
     void clear();
     void setPixel(int idx, uint32_t color);
-    void updateStrip(const std::vector<uint32_t>& colors);
-    void updateStripWithGamma(std::vector<cv::Vec3b> colors);
+    void updateStrip(const std::vector<cv::Vec3b>& colors, bool temporalSmoothOn = true);
+    void updateStripWithGamma(const std::vector<cv::Vec3b>& colors, bool temporalSmoothOn = true);
     void setBrightness(int brightness);
     int size() const;
     void calibrateBrightness(float maxAmperage, float supplyVoltage);
+    float temporalSmooth(float valueNew, float valueOld);
+
 
     int getBrightness() const;
 

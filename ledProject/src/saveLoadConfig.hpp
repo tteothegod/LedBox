@@ -135,3 +135,5 @@ class SetupParameters {
 
 int loadConfig(SetupParameters& params, const std::string& path = "config.txt");
 
+int saveConfig(SetupParameters& params, const std::string& path = "config.txt");
+

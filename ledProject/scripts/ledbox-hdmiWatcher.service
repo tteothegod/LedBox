@@ -1,0 +1,14 @@
+[Unit]
+Description=HDMI Audio RMS Signal Watcher
+After=sound.target
+
+[Service]
+Type=simple
+User=magodi12
+# Allow the script to run sudo systemctl without a password prompt
+ExecStart=/usr/bin/python3 /home/magodi12/LedBox/ledProject/scripts/hdmi_watcher.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

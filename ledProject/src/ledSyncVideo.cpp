@@ -57,14 +57,15 @@ cv::Vec3b meanBGR_u8(const cv::Mat& roi) {
     );
 }
 
-cv::Mat generateLedPreview(const cv::Mat& small_frame, const std::vector<cv::Vec3b>& colors, int frameWidth, int frameHeight, int ledsTop, int ledsRight, int ledsBottom, int ledsLeft) {
+cv::Mat generateLedPreview(const cv::Mat& small_frame, const std::vector<cv::Vec3b>& colors, int smallFrameWidth, int smallFrameHeight, int ledsTop, int ledsRight, int ledsBottom, int ledsLeft) {
     constexpr float paddingFactor = 0.1;
     int sidePadding= std::round(smallFrameWidth * paddingFactor);
     int topPadding = std::round(smallFrameHeight * paddingFactor);
 
-    int previewFrameWidth = smallFrameWidth + sidePadding;
-    int previewFrameHeight = smallFrameHeight + topPadding;
-    cv::Mat preview(previewFrameWidth, previewFrameHeight, CV_8UC3);
+    int previewFrameWidth = smallFrameWidth + sidePadding * 2;
+    int previewFrameHeight = smallFrameHeight + topPadding * 2;
+    // cv::Mat constructor takes (rows, cols) which is (height, width)
+    cv::Mat preview(previewFrameHeight, previewFrameWidth, CV_8UC3, cv::Scalar(0, 0, 0));
 
     float topIdealPixel = smallFrameWidth / ledsTop;
     float rightIdealPixel = smallFrameHeight / ledsRight;
@@ -74,32 +75,31 @@ cv::Mat generateLedPreview(const cv::Mat& small_frame, const std::vector<cv::Vec
     for(int i = 0; i < ledsTop; ++i) { // For every top led
         int x0 = std::clamp((int)std::round(sidePadding + i * topIdealPixel), 0, previewFrameWidth);
         int x1 = std::clamp((int)std::round(sidePadding + (i + 1) * topIdealPixel), 0, previewFrameWidth); 
-        cv::Rectangle(preview, x0, x1, 0, topPadding, colors[i]); // formatted at x0 x1 y0 y1, (RGB)
+        cv::rectangle(preview, cv::Point(x0, 0), cv::Point(x1, topPadding), colors[i], -1); // formatted at x0 x1 y0 y1, (RGB)
     }
     for(int i = 0; i < ledsRight; ++i) {
         int y0 = std::clamp((int)std::round(topPadding + i * rightIdealPixel), 0, previewFrameHeight);
         int y1 = std::clamp((int)std::round(topPadding + (i + 1) * rightIdealPixel), 0, previewFrameHeight); 
         int x0 = std::max(0, previewFrameWidth - sidePadding);
-        cv::Rectangle(preview, x0, previewFrameWidth, y0, y1, colors[ledsTop + i]); // TODO: review bounds are correct to avoid seg fault
+        cv::rectangle(preview, cv::Point(x0, y0), cv::Point(previewFrameWidth, y1), colors[ledsTop + i], -1); // TODO: review bounds are correct to avoid seg fault
     }
     for(int i = 0; i < ledsBottom; ++i) {
-        int x0 = std::clamp((int)std::round(previewFrameWidth - (i + 1) * bottomIdealPixel - sidePadding), 0, previewFrameWidth);
-        int x1 = std::clamp((int)std::round(previewFrameWidth - i * bottomIdealPixel - sidePadding), 0, previewFrameWidth);
-        if (x1 < x0) std::swap(x1, x0);
+        int x0 = std::clamp((int)std::round(sidePadding + (ledsBottom - 1 - i) * bottomIdealPixel), 0, previewFrameWidth);
+        int x1 = std::clamp((int)std::round(sidePadding + (ledsBottom - i) * bottomIdealPixel), 0, previewFrameWidth);
         int y0 = std::max(0, previewFrameHeight - topPadding);
-        cv::Rectangle(preview, x0, x1, y0, previewFrameHeight, colors[ledsTop + ledsRight + i]); // formatted at x0 x1 y0 y1, (RGB) are correct to avoid seg fault
+        cv::rectangle(preview, cv::Point(x0, y0), cv::Point(x1, previewFrameHeight), colors[ledsTop + ledsRight + i], -1);
     }
     for(int i = 0; i < ledsLeft; ++i) {
-        int y0 = std::clamp((int)std::round(previewFrameHeight - (i + 1) * leftIdealAmt - topPadding), 0, previewFrameHeight);
-        int y1 = std::clamp((int)std::round(previewFrameHeight - i * leftIdealAmt - topPadding), 0, previewFrameHeight);
-        if (y1 < y0) std::swap(y1, y0);
-        cv::Rectangle(preview, 0, sidePadding, y0, y1, colors[ledsTop + ledsRight + ledsBottom + i]); // formatted at x0 x1 y0 y1, (RGB) are correct to avoid seg fault
+        int y0 = std::clamp((int)std::round(topPadding + (ledsLeft - 1 - i) * leftIdealPixel), 0, previewFrameHeight);
+        int y1 = std::clamp((int)std::round(topPadding + (ledsLeft - i) * leftIdealPixel), 0, previewFrameHeight);
+        cv::rectangle(preview, cv::Point(0, y0), cv::Point(sidePadding, y1), colors[ledsTop + ledsRight + ledsBottom + i], -1);
     }
 
     cv::Mat smallFrameRGB;
-    cv::cvtColor(small_frame, smallFrameRGB, cv::COLOR_BGR2RGB);
+    // The input small_frame is BGR, but OpenCV rectangle colors are BGR, so we don't need to convert!
+    // The colors vector is also BGR from the mean calculation.
     cv::Rect roi(sidePadding, topPadding, smallFrameWidth, smallFrameHeight);
-    smallFrameRGB.copyTo(preview(roi));
+    small_frame.copyTo(preview(roi));
     return preview;
 }
 
@@ -167,7 +167,7 @@ int ledSyncVideo(bool savePicture) {
     }
 
     LEDStrip strip(params.getLEDCount(), GPIO_PIN, DMA_NUM, params.getBrightness());
-    strip.configureBrightness(params.getMaxAmperage(), params.getSupplyVoltage());
+    strip.calibrateBrightness(params.getMaxAmperage(), params.getSupplyVoltage());
 
     /******** Initialize LED strip ********/
     if (!strip.init()) {
@@ -183,8 +183,8 @@ int ledSyncVideo(bool savePicture) {
     // Define border thickness for sampling and visualization
 
 
-    int smallFrameWidth = (int) std::round(videoWidth * resizeFactor);
-    int smallFrameHeight = (int) std::round(videoHeight * resizeFactor);
+    int smallFrameWidth = (int) std::round(videoWidth * resize_factor);
+    int smallFrameHeight = (int) std::round(videoHeight * resize_factor);
     int border_thickness = floor(smallFrameHeight * border_percent);
 
     std::vector<int> frameCorners = alignCornersToZero(layout, strip.size());
@@ -260,7 +260,9 @@ int ledSyncVideo(bool savePicture) {
             int y0 = std::clamp((int)std::round(smallFrameHeight - (i + 1) * leftIdealPixelAmt), 0, smallFrameHeight);
             int y1 = std::clamp((int)std::round(smallFrameHeight - i * leftIdealPixelAmt), 0, smallFrameHeight);
             if (y1 < y0) std::swap(y1, y0);
-            rois[frameCorners[3] + i] = cv::Rect(0, y0, std::min(border_thickness, smallFrameWidth), std::max(1, y1 - y0));
+            // Use modulo to wrap around for the final LEDs on the left edge
+            int roi_index = (frameCorners[3] + i) % num_leds;
+            rois[roi_index] = cv::Rect(0, y0, std::min(border_thickness, smallFrameWidth), std::max(1, y1 - y0));
         }
 
         // --- Calculate all LED colors in a single optimized loop using pointer access ---
@@ -308,14 +310,15 @@ int ledSyncVideo(bool savePicture) {
                 colors[i] = meanBGR_u8(roi_frame);
             }
         }
-        if(savePicture && frameCounter % 31 == 0) { // Every 30 frames
-            frameCounter = 1;
-            cv::Mat preview = generateLedPreview(small_frame, colors, smallFrameWidth, smallFrameHeight, ledsTop, ledsRight, ledsBottom, ledsLeft);
-            cv::imwrite("preview.jpg", preview);
+        if(savePicture && frameCounter % 30 == 0) { // Every 30 frames (approx. 1 second)
+            cv::Mat preview = generateLedPreview(small_frame, colors, smallFrameWidth, smallFrameHeight, leds_top, leds_right, leds_bottom, leds_left);
+            if (!cv::imwrite("preview.jpg", preview)) {
+                std::cerr << "Warning: Failed to save preview.jpg" << std::endl;
+            }
         }
 
         std::vector<cv::Vec3b> stripColors = transformIdealToStripVec(colors, layout);
-        strip.updateStripWithGamma(transformIdealToStripVec(colors, layout));
+        strip.updateStripWithGamma(stripColors);
         strip.show();
     }
 
@@ -325,12 +328,13 @@ int ledSyncVideo(bool savePicture) {
 int main(int argc, char* argv[]) {
     try {
         bool savePicture = false;
-        if(argc > 0) {
+        if (argc > 1) { // Check if there's at least one argument
             std::string arg1(argv[1]);
-            if(arg1 == "--save-picture") {
+            if (arg1 == "--save-picture") {
                 savePicture = true;
+                std::cout << "Save picture flag enabled. Previews will be saved to preview.jpg" << std::endl;
             }
-        } 
+        }
         return ledSyncVideo(savePicture);
     } catch (const std::exception& e) {
         std::cerr << "Unhandled exception: " << e.what() << std::endl;

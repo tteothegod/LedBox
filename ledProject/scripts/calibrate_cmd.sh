@@ -1,2 +1,2 @@
 echo "Calibrating..."
-systemctl start ledbox-calibrate.service
+sudo /usr/bin/systemctl start ledbox-calibrate.service

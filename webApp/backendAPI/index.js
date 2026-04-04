@@ -1,4 +1,5 @@
 const express = require('express');
+const cors = require('cors');
 const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
@@ -9,6 +10,7 @@ const app = express();
 
 // Accept plain text bodies for config upload (adjust limits as needed)
 app.use(express.text({ type: 'text/*', limit: '200kb' }));
+app.use(cors());
 
 // Base directory for files (config, screenshots). Configure via env var.
 const BASE_DIR = path.resolve(process.env.BASE_DIR || path.join(os.homedir(), 'ledBox')) + path.sep;
@@ -18,7 +20,7 @@ const CONFIG_FILENAME = process.env.CONFIG_FILENAME || 'config.txt';
 const LEDSYNCVIDEO_STATUS_FILE = process.env.LEDSYNCVIDEO_STATUS_FILE || '/run/ledbox/ledSyncVideo_status.json';
 // const CALIBRATE_STATUS_FILE = process.env.CALIBRATE_STATUS_FILE || '/run/ledbox/calibrate_status.json';
 const CALIBRATE_STATUS_FILE = process.env.CALIBRATE_STATUS_FILE || '/run/ledbox/calibrate_status.json';
-const LATEST_SCREENSHOT_FILE = process.env.LATEST_SCREENSHOT_FILE || path.join(BASE_DIR, 'latestImg.jpg');
+const LATEST_SCREENSHOT_FILE = process.env.LATEST_SCREENSHOT_FILE || 'preview.jpg';
 
 // Server start timestamp for status endpoint
 const SERVER_STARTED_AT = new Date().toISOString();
@@ -149,7 +151,7 @@ app.post('/api/control/sync', async (req, res, next) => {
 app.get('/api/screenshot', async (req, res, next) => {
   try {
     // Serve only the configured latest screenshot file. Do not accept arbitrary filenames.
-    const filePath = resolveWithinBase(LATEST_SCREENSHOT_FILE);
+    const filePath = safeResolve(LATEST_SCREENSHOT_FILE);
     if (!fsSync.existsSync(filePath)) return res.status(404).send('no screenshots found');
     res.sendFile(filePath);
   } catch (err) {

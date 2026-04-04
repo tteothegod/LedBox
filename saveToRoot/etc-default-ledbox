@@ -1,18 +1,22 @@
 # Gpio
-SYNC_PIN=22
-CALIBRATE_PIN=23
-EDGE=falling
+SYNC_PIN=534
+CALIBRATE_PIN=536
+HARDWARE_BCM_PIN=24
+BTN_EDGE=falling
+HDMI_EDGE=falling
 DEBOUNCE_MS=200
 SYNC_CMD=/home/magodi12/LedBox/ledProject/sync_cmd.sh
-CALIBRATE_CMD=/home/magodi12/LedBox/ledProject/calibrate_cmd.sh
+LED_SYNC_VIDEO_CMD=/home/magodi12/LedBox/ledProject/ledSyncVideo
+CALIBRATE_CMD=/home/magodi12/LedBox/ledProject/scripts/calibrate_cmd.sh
 
 #Sync video
-SYNC_CMD=/home/magodi12/LedBox/ledProject/sync_cmd.sh 
+SYNC_CMD=/home/magodi12/LedBox/ledProject/scripts/ledSyncVideo-wrapper.js
 LED_SYNC_STATUS_FILE=/run/ledbox/ledSyncVideo_status.json 
 
 #API
 BASE_DIR=/home/magodi12/LedBox/ledProject
-CONFIG_FILENAME=config.json
+CONFIG_FILENAME=config.txt
+LATEST_SCREENSHOT_FILE=preview.jpg
 LEDSYNCVIDEO_STATUS_FILE=/run/ledbox/ledSyncVideo_status.json
 CALIBRATE_STATUS_FILE=/run/ledbox/calibrate_status.json
 

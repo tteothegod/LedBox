@@ -170,9 +170,9 @@ int calibrateLEDIdx(LEDStrip& strip, int initValue) {
     return workingIdx;
 }
 
-void calibratePercentage(LEDStrip& strip, int cornerZeroIndex, float initPercentage = 0) {
+float calibratePercentage(LEDStrip& strip, int cornerZeroIndex, float initPercentage = 0.0f) {
     std::cout << "Calibrating Percentage ..." << std::endl;
-    float percentIncrement = 1 / (cornerZeroIndex(float) + 1);
+    float percentIncrement = 1.0f / (static_cast<float>(cornerZeroIndex) + 1.0f);
     float workingPercentage = initPercentage;
     while (true) {
         int leftBtnState = digitalRead(GPIO_LEFT_BTN);
@@ -185,17 +185,17 @@ void calibratePercentage(LEDStrip& strip, int cornerZeroIndex, float initPercent
             break;
         }
         if(leftBtnState == LOW && rightBtnState == HIGH) {
-            workingPercentage = std::max(1, workingPercentage - percentIncrement);
-            std::cout << "Left button pressed! Current working percentage: " << workingPercentage * 100 << std::endl;
+            workingPercentage = std::max(0.0f, workingPercentage - percentIncrement);
+            std::cout << "Left button pressed! Current working percentage: " << workingPercentage * 100.0f << std::endl;
             delay(300); // Debounce delay
         }
         if(rightBtnState == LOW && leftBtnState == HIGH) {
-            workingPercentage = std::min(0, workingPercentage + percentIncrement);
-            std::cout << "Right button pressed! Current working percentage: " << workingPercentage * 100 << std::endl;
+            workingPercentage = std::min(1.0f, workingPercentage + percentIncrement);
+            std::cout << "Right button pressed! Current working percentage: " << workingPercentage * 100.0f << std::endl;
             delay(300); // Debounce delay
         }
 
-        int currentIndex = static_cast<int>(std::round(workingPercentage * (cornerZeroIndex + 1)))
+        int currentIndex = static_cast<int>(std::round(workingPercentage * (cornerZeroIndex + 1)));
 
         for (int i = 0; i < currentIndex; ++i) {
             strip.setPixel(i, LEDStrip::Color(0, 255, 0)); // Set the first 'workingLength' LEDs to white
@@ -206,12 +206,12 @@ void calibratePercentage(LEDStrip& strip, int cornerZeroIndex, float initPercent
         for( int i = cornerZeroIndex + 1; i < strip.size(); ++i) {
             strip.setPixel(i, LEDStrip::Color(0, 0, 0)); // Clear all LEDs
         }
-        strip.setPixel(workingIdx, LEDStrip::Color(255, 0, 0)); // Set the last LED to red
+        strip.setPixel(currentIndex, LEDStrip::Color(255, 0, 0)); // Highlight current index in red
         strip.show();
     }
 
+    return workingPercentage;
 }
-
 
 int* calibrateLEDLayout(LEDStrip& strip, int* prevLEDLayout) {
     std::cout << "Calibrating LED layout..." << std::endl;
@@ -262,7 +262,6 @@ int calibrate() {
     switch (programSelIdx) {
         case 0:
             // Exit Program
-            return 0;
             break;
         case 1:
             // Calibrate Brightness
@@ -296,6 +295,11 @@ int calibrate() {
         strip.setPixel(i, LEDStrip::Color(0, 0, 0)); // Set all LEDs to the current working brightness
     }
     strip.show();
+    if(saveConfig(params)) {
+        std::cout << "Config saved successfully." << std::endl;
+    } else {
+        std::cerr << "Error: Failed to save config." << std::endl;
+    }
     // TODO: save config after calibration so that it can be loaded in the future without needing to recalibrate every time
     return 0;
 }

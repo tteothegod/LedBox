@@ -1,4 +1,5 @@
-const root = '';
+const port = 3000;
+const root = `${window.location.protocol}//${window.location.hostname}:${port}`;
 
 export async function fetchStatus(){
   try{
