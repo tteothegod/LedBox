@@ -1,4 +1,4 @@
-const { execFile, exec, execSync } = require('child_process');
+const { exec, execSync } = require('child_process');
 const path = require('path');
 const Gpio = require('onoff').Gpio;
 
@@ -10,10 +10,9 @@ const HARDWARE_BCM_PIN = process.env.HARDWARE_BCM_PIN || '24';
 
 const BTN_EDGE = process.env.BTN_EDGE || 'falling'; // falling because we want when button goes low (pressed). Not clk rising/falling
 const DEBOUNCE_MS = parseInt(process.env.DEBOUNCE_MS || '200', 10);
-const CALIBRATE_CMD = process.env.CALIBRATE_CMD || '/home/magodi12/LedBox/ledProject/scripts/calibrate_cmd.sh';
-const BASE_DIR = process.env.BASE_DIR || '/home/magodi12/LedBox/ledProject';
+const CALIBRATE_WRAPPER = path.join(__dirname, 'calibrate_wrapper.js');
 
-console.log(`Starting GPIO watcher: sysfs_pin=${CALIBRATE_PIN}, hardware_pin=${HARDWARE_BCM_PIN}, edge=${BTN_EDGE}, cmd=${CALIBRATE_CMD}`);
+console.log(`Starting GPIO watcher: sysfs_pin=${CALIBRATE_PIN}, hardware_pin=${HARDWARE_BCM_PIN}, edge=${BTN_EDGE}, wrapper=${CALIBRATE_WRAPPER}`);
 
 // ---------------------------------------------------------
 // FIX: Enable the internal Pull-Up resistor via system call
@@ -39,70 +38,23 @@ let calibrateProcess = null;
 // Now that the hardware is pulled HIGH, we can safely listen for the 'falling' edge
 const calibrateButton = new Gpio(CALIBRATE_PIN, 'in', BTN_EDGE, { debounceTimeout: DEBOUNCE_MS });
 
-function stopSyncService() {
-    return new Promise((resolve) => {
-        exec('sudo systemctl is-active ledbox-ledSyncVideo.service', (err, stdout) => {
-            const isActive = stdout.trim() === 'active';
-            if (isActive) {
-                console.log('Stopping ledbox-ledSyncVideo.service...');
-                exec('sudo systemctl stop ledbox-ledSyncVideo.service', (stopErr) => {
-                    if (stopErr) console.error('Failed to stop service:', stopErr);
-                    resolve(true); // Indicate it was running
-                });
-            } else {
-                console.log('ledbox-ledSyncVideo.service is not active, no need to stop.');
-                resolve(false); // Indicate it wasn't running
-            }
-        });
-    });
-}
-
-function startSyncService() {
-    return new Promise((resolve) => {
-        console.log('Starting ledbox-ledSyncVideo.service...');
-        exec('sudo systemctl start ledbox-ledSyncVideo.service', (err, stdout, stderr) => {
-            if (err) console.error('Failed to start service:', err);
-            resolve();
-        });
-    });
-}
-
-async function runCalibrateCmd() {
+function runCalibrateWrapper() {
     if (calibrateProcess) {
-        console.log('Calibrate Program already running; skipping trigger');
+        console.log('Calibrate wrapper already running; skipping trigger');
         return;
     }
     
-    // Stop the active sync systemd service to prevent hardware resource collisions
-    console.log('Calibrate triggered. Checking sync service status...');
-    const wasSyncRunning = await stopSyncService();
-    
-    if (wasSyncRunning) {
-        // Give the service a brief moment to cleanly release the hardware
-        await new Promise(resolve => setTimeout(resolve, 500));
-    }
-
-    console.log(`${new Date().toISOString()} - Executing ${CALIBRATE_CMD}`);
-    calibrateProcess = execFile(CALIBRATE_CMD, { cwd: BASE_DIR }, async (err, stdout, stderr) => {
-        
+    console.log('Launching calibrate_wrapper.js...');
+    // We launch the wrapper in the background
+    calibrateProcess = exec(`node ${CALIBRATE_WRAPPER}`, (err, stdout, stderr) => {
         if (err) {
-            console.error('Calibrate command failed:', err);
-            if (stdout) console.log('stdout:', stdout.toString());
-            if (stderr) console.log('stderr:', stderr.toString());
-        } else {
-            console.log('Calibrate command completed. stdout:', stdout?.toString());
+            console.error('Calibrate wrapper failed:', err);
         }
+        if (stdout) console.log('wrapper stdout:', stdout.toString());
+        if (stderr) console.log('wrapper stderr:', stderr.toString());
         
-        // Reset the lock so it can be pressed again
+        // Reset the lock so it can be pressed again later
         calibrateProcess = null;
-
-        // Only restart sync service if it was running beforehand
-        if (wasSyncRunning) {
-            console.log('Calibrate finished. Resuming sync service...');
-            await startSyncService();
-        } else {
-            console.log('Calibrate finished.');
-        }
     });
 }
 
@@ -115,8 +67,7 @@ calibrateButton.watch((err, value) => {
   
   console.log(`[GPIO INTERRUPT] Button pressed! Pin level: ${value}`);
   
-  // Notice we must wrap the execution to handle async rejection
-  runCalibrateCmd().catch(e => console.error('runCalibrateCmd error', e));
+  runCalibrateWrapper();
 });
 
 // Cleanup on exit

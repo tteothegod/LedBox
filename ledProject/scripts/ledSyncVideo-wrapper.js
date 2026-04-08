@@ -1,11 +1,11 @@
-const { execFile } = require('child_process');
+const { execFile, exec } = require('child_process');
 const path = require('path');
 const fs = require('fs').promises;
 
 const SYNC_CMD = process.env.SYNC_CMD || '/home/magodi12/ledProject/sync_cmd.sh';
 const LED_SYNC_VIDEO_CMD = process.env.LED_SYNC_VIDEO_CMD || '/home/magodi12/LedBox/ledProject/ledSyncVideo';
 const BASE_DIR = process.env.BASE_DIR || '/home/magodi12/LedBox/ledProject';
-const STATUS_FILE = process.env.LED_SYNC_STATUS_FILE || '/run/ledbox/ledSyncVideo_status.json';
+const LED_SYNC_STATUS_FILE = process.env.LED_SYNC_STATUS_FILE || '/run/ledbox/ledSyncVideo_status.json';
 
 // Declare child at the top level so signal handlers can access it!
 let child = null;
@@ -28,7 +28,7 @@ async function atomicWrite(filePath, data) {
 
 async function writeStatus(status) {
   try {
-    await atomicWrite(STATUS_FILE, JSON.stringify(status, null, 2));
+    await atomicWrite(LED_SYNC_STATUS_FILE, JSON.stringify(status, null, 2));
   } catch (e) {
     console.error('Failed to write status file', e);
   }
@@ -41,7 +41,6 @@ async function runSyncCmd() {
 
   try {
     // spawn the process; execFile returns a ChildProcess that contains .pid and streams
-    // We assign it to the globally scoped `child` variable here
     child = execFile(LED_SYNC_VIDEO_CMD, ['--save-picture'], { cwd: BASE_DIR }, (err, stdout, stderr) => {
       if (err) {
         console.error('LED Sync Video process error:', err);

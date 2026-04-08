@@ -18,6 +18,65 @@ LEDStrip::LEDStrip(int count, int gpio_pin, int dmanum, int brightness) {
     temporalAlpha = 0.25;
 }
 
+
+LEDStrip::LEDStrip() {
+    memset(&ledstring, 0, sizeof(ws2811_t));
+    ledstring.freq = WS2811_TARGET_FREQ;
+    ledstring.dmanum = DMA_NUM;
+    ledstring.channel[0].gpionum = GPIO_PIN;
+    ledstring.channel[0].invert = 0;
+    ledstring.channel[0].count = LED_COUNT;
+    ledstring.channel[0].strip_type = WS2811_STRIP_BRG;
+    ledstring.channel[0].brightness = 255;
+
+    previousColor = std::vector<cv::Vec3b>(LED_COUNT, cv::Vec3b(0,0,0));
+    temporalAlpha = 0.25;    
+}
+
+LEDStrip::LEDStrip(const LEDStrip& other) {
+    ledstring = other.ledstring;
+    is_initialized = other.is_initialized;
+    previousColor = other.previousColor;
+    temporalAlpha = other.temporalAlpha;
+}
+
+LEDStrip& LEDStrip::operator=(const LEDStrip& other) {
+    if (this != &other) {
+        if (is_initialized) {
+            ws2811_fini(&ledstring);
+            is_initialized = false;
+        }
+        ledstring = other.ledstring;
+        is_initialized = other.is_initialized;
+        previousColor = other.previousColor;
+        temporalAlpha = other.temporalAlpha;
+    }
+    return *this;
+}
+
+LEDStrip::LEDStrip(LEDStrip&& other) noexcept 
+    : ledstring(other.ledstring), previousColor(std::move(other.previousColor)), temporalAlpha(other.temporalAlpha) {
+    is_initialized = other.is_initialized;
+    other.is_initialized = false;
+    memset(&other.ledstring, 0, sizeof(ws2811_t));
+}
+
+LEDStrip& LEDStrip::operator=(LEDStrip&& other) noexcept {
+    if (this != &other) {
+        if (is_initialized) {
+            ws2811_fini(&ledstring);
+        }
+        ledstring = other.ledstring;
+        is_initialized = other.is_initialized;
+        previousColor = std::move(other.previousColor);
+        temporalAlpha = other.temporalAlpha;
+        
+        other.is_initialized = false;
+        memset(&other.ledstring, 0, sizeof(ws2811_t));
+    }
+    return *this;
+}
+
 LEDStrip::~LEDStrip() {
     if (is_initialized) {
         ws2811_fini(&ledstring);
@@ -49,6 +108,7 @@ void LEDStrip::show() {
 }
 
 void LEDStrip::clear() {
+    std::cout << "Clearing pixels..." << std::endl;
     for (int i = 0; i < ledstring.channel[0].count; ++i) {
         ledstring.channel[0].leds[i] = 0;
     }
@@ -130,6 +190,10 @@ uint32_t LEDStrip::Color(uint8_t r, uint8_t g, uint8_t b) {
 
 int LEDStrip::getBrightness() const {
     return ledstring.channel[0].brightness;
+}
+
+bool LEDStrip::isInitialized() const {
+    return is_initialized;
 }
 
 void LEDStrip::calibrateBrightness(float maxAmperage, float supplyVoltage) {

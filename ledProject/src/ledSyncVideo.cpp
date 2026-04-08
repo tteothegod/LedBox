@@ -3,7 +3,8 @@
 #include <vector>
 #include <algorithm>
 #include <cmath>
-
+#include <atomic>
+#include <csignal>
 // OpenCV Headers - You were missing these!
 #include <opencv2/opencv.hpp>
 #include <opencv2/videoio.hpp>
@@ -13,7 +14,9 @@
 #include "led_strip.h"
 #include "saveLoadConfig.hpp"
 
+std::atomic<bool> run{true};
 
+LEDStrip strip;
 
 static constexpr const char* kPipe = "v4l2src device=/dev/video0 do-timestamp=true ! "
     "image/jpeg,width=1280,height=720,framerate=30/1 ! "
@@ -67,10 +70,10 @@ cv::Mat generateLedPreview(const cv::Mat& small_frame, const std::vector<cv::Vec
     // cv::Mat constructor takes (rows, cols) which is (height, width)
     cv::Mat preview(previewFrameHeight, previewFrameWidth, CV_8UC3, cv::Scalar(0, 0, 0));
 
-    float topIdealPixel = smallFrameWidth / ledsTop;
-    float rightIdealPixel = smallFrameHeight / ledsRight;
-    float bottomIdealPixel = smallFrameWidth / ledsBottom;
-    float leftIdealPixel = smallFrameWidth / ledsLeft;
+    float topIdealPixel = (float)smallFrameWidth / ledsTop;
+    float rightIdealPixel = (float)smallFrameHeight / ledsRight;
+    float bottomIdealPixel = (float)smallFrameWidth / ledsBottom;
+    float leftIdealPixel = (float)smallFrameHeight / ledsLeft;
 
     for(int i = 0; i < ledsTop; ++i) { // For every top led
         int x0 = std::clamp((int)std::round(sidePadding + i * topIdealPixel), 0, previewFrameWidth);
@@ -103,7 +106,22 @@ cv::Mat generateLedPreview(const cv::Mat& small_frame, const std::vector<cv::Vec
     return preview;
 }
 
+void sigTerminate(int signum) {
+    if (signum == SIGINT) {
+        std::cout << "\nSIGINT received, exiting gracefully..." << std::endl;
+    } else {
+        std::cout << "\nSIGTERM received, exiting gracefully..." << std::endl;
+    }
+    run.store(false);
+}
+
 int ledSyncVideo(bool savePicture) {
+
+    struct sigaction sa;
+    memset(&sa, 0 , sizeof(sa));
+    sa.sa_handler = sigTerminate;
+    sigaction(SIGINT, &sa, nullptr);
+    sigaction(SIGTERM, &sa, nullptr);
 
     // TODO: Figure out a better way of doing this
     int frameCounter = 1;
@@ -166,7 +184,7 @@ int ledSyncVideo(bool savePicture) {
         params.configureLayout(videoWidth, videoHeight); // Default to video dimensions if count isn't specified but length and density are
     }
 
-    LEDStrip strip(params.getLEDCount(), GPIO_PIN, DMA_NUM, params.getBrightness());
+    strip = LEDStrip(params.getLEDCount(), GPIO_PIN, DMA_NUM, params.getBrightness());
     strip.calibrateBrightness(params.getMaxAmperage(), params.getSupplyVoltage());
 
     /******** Initialize LED strip ********/
@@ -193,6 +211,7 @@ int ledSyncVideo(bool savePicture) {
     int leds_right = frameCorners[2] - frameCorners[1];
     int leds_bottom = frameCorners[3] - frameCorners[2];
     int leds_left = strip.size() - frameCorners[3];
+    std::cout << "LEDs per side: top=" << leds_top << " right=" << leds_right << " bottom=" << leds_bottom << " left=" << leds_left << std::endl;
 
     // Ideal pixel amounts per LED for each side
     float topIdealPixelAmt = (float)smallFrameWidth / leds_top;
@@ -200,7 +219,7 @@ int ledSyncVideo(bool savePicture) {
     float bottomIdealPixelAmt = (float)smallFrameWidth / leds_bottom;
     float leftIdealPixelAmt = (float)smallFrameHeight / leds_left;
 
-    while (true) {
+    while (run.load()) {
         if (!capture.read(frame)) {
             std::cout << "Video frame unavailable ending program...";
             break; // Break if looping also fails
@@ -321,7 +340,12 @@ int ledSyncVideo(bool savePicture) {
         strip.updateStripWithGamma(stripColors);
         strip.show();
     }
-
+    
+    // Clean up pixels cleanly after the loop finishes instead of interrupting the middle of a frame
+    if (strip.isInitialized()) {
+        strip.clear();
+    }
+    
     return 0;
 }
 

@@ -16,7 +16,12 @@ constexpr float wattsPerPixel = 0.2; // 0.2 Watts
 
 class LEDStrip {
 public:
+    LEDStrip();
     LEDStrip(int count, int gpio_pin, int dmanum, int brightness = 255);
+    LEDStrip(const LEDStrip& other);
+    LEDStrip& operator=(const LEDStrip& other);
+    LEDStrip(LEDStrip&& other) noexcept;
+    LEDStrip& operator=(LEDStrip&& other) noexcept;
     ~LEDStrip();
 
     void setCount(int count);
@@ -34,6 +39,7 @@ public:
 
 
     int getBrightness() const;
+    bool isInitialized() const;
 
     static uint32_t Color(uint8_t r, uint8_t g, uint8_t b);
 

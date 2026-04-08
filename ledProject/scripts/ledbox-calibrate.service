@@ -3,11 +3,13 @@ Description=Service that runs calibrate, that allows the status of the program t
 After=network.target
 
 [Service]
-Type=oneshot
-ExecStart=/home/magodi12/LedBox/ledProject/calibrate --run-once
+Type=simple
+ExecStart=/usr/bin/node /home/magodi12/LedBox/ledProject/scripts/calibrate_wrapper.js
 EnvironmentFile=/etc/default/ledbox
 WorkingDirectory=/home/magodi12/LedBox/ledProject
-RemainAfterExit=no
+Restart=no
+# Give the wrapper 5 seconds to write the status file before force-killing it
+TimeoutStopSec=5
 
 [Install]
 WantedBy=multi-user.target

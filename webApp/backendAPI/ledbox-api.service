@@ -3,8 +3,7 @@ Description=ledProject REST API
 After=network.target
 
 [Service]
-User=magodi12
-Group=magodi12
+User=root
 EnvironmentFile=/etc/default/ledbox
 WorkingDirectory=/home/magodi12/LedBox/ledProject
 ExecStart=/usr/bin/node /home/magodi12/LedBox/webApp/backendAPI/index.js
