@@ -228,6 +228,7 @@ int* calibrateLEDLayout(LEDStrip& strip, int* prevLEDLayout) {
 }
 
 int calibrate() {
+    delay(2000); // Short delay to allow system to stabilize
     // WiringPi setup
     if (wiringPiSetupGpio() == -1) {
         std::cerr << "Error: Failed to setup wiringPi." << std::endl;

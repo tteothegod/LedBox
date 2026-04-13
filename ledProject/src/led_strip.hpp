@@ -32,6 +32,8 @@ public:
     void setPixel(int idx, uint32_t color);
     void updateStrip(const std::vector<cv::Vec3b>& colors, bool temporalSmoothOn = true);
     void updateStripWithGamma(const std::vector<cv::Vec3b>& colors, bool temporalSmoothOn = true);
+    // Per-channel scale factors in range [0.0, 1.0]. Applied to incoming RGB before output/gamma.
+    void setChannelScales(float r_scale, float g_scale, float b_scale);
     void setBrightness(int brightness);
     int size() const;
     void calibrateBrightness(float maxAmperage, float supplyVoltage);
@@ -42,6 +44,8 @@ public:
     bool isInitialized() const;
 
     static uint32_t Color(uint8_t r, uint8_t g, uint8_t b);
+    // Return pointer to internal gamma table (256 entries)
+    static const uint8_t* getGammaTable();
 
 private:
     ws2811_t ledstring;
@@ -49,6 +53,10 @@ private:
     static const uint8_t gamma8[];
     std::vector<cv::Vec3b> previousColor;
     float temporalAlpha;
+    // Per-channel scale factors (0.0 - 1.0)
+    float channelScaleR;
+    float channelScaleG;
+    float channelScaleB;
 };
 
 #endif // LED_STRIP_H

@@ -8,10 +8,9 @@ DEBOUNCE_MS=200
 SYNC_CMD=/home/magodi12/LedBox/ledProject/sync_cmd.sh
 LED_SYNC_VIDEO_CMD=/home/magodi12/LedBox/ledProject/ledSyncVideo
 CALIBRATE_CMD=/home/magodi12/LedBox/ledProject/scripts/calibrate_cmd.sh
-CALIBRATE_BINARY=/home/magodi12/LedBox/ledProject/calibrate
 
 #Sync video
-SYNC_CMD=/home/magodi12/LedBox/ledProject/scripts/ledSyncVideo-wrapper.js
+SYNC_CMD=/home/magodi12/LedBox/ledProject/scripts/sync_cmd.sh
 
 #API
 BASE_DIR=/home/magodi12/LedBox/ledProject

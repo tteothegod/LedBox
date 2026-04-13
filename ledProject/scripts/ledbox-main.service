@@ -1,0 +1,16 @@
+[Unit]
+Description=LedBox main program
+After=sound.target
+
+[Service]
+Type=simple
+User=root
+
+# Allow the script to run sudo systemctl without a password prompt
+WorkingDirectory=/home/magodi12/LedBox/ledProject
+ExecStart=/home/magodi12/LedBox/ledProject/ledboxMain --save-picture
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

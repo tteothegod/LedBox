@@ -2,6 +2,7 @@
 #include <iostream>
 #include <cstring>
 #include <cmath>
+#include <algorithm>
 
 LEDStrip::LEDStrip(int count, int gpio_pin, int dmanum, int brightness) {
     memset(&ledstring, 0, sizeof(ws2811_t));
@@ -16,6 +17,10 @@ LEDStrip::LEDStrip(int count, int gpio_pin, int dmanum, int brightness) {
 
     previousColor = std::vector<cv::Vec3b>(count, cv::Vec3b(0,0,0));
     temporalAlpha = 0.25;
+    // Default channel scales (no scaling)
+    channelScaleR = 1.0f;
+    channelScaleG = 0.788235294118;
+    channelScaleB = 0.741176470588;
 }
 
 
@@ -31,6 +36,9 @@ LEDStrip::LEDStrip() {
 
     previousColor = std::vector<cv::Vec3b>(LED_COUNT, cv::Vec3b(0,0,0));
     temporalAlpha = 0.25;    
+    channelScaleR = 1.0f;
+    channelScaleG = 0.788235294118;
+    channelScaleB = 0.741176470588;
 }
 
 LEDStrip::LEDStrip(const LEDStrip& other) {
@@ -38,6 +46,9 @@ LEDStrip::LEDStrip(const LEDStrip& other) {
     is_initialized = other.is_initialized;
     previousColor = other.previousColor;
     temporalAlpha = other.temporalAlpha;
+    channelScaleR = other.channelScaleR;
+    channelScaleG = other.channelScaleG;
+    channelScaleB = other.channelScaleB;
 }
 
 LEDStrip& LEDStrip::operator=(const LEDStrip& other) {
@@ -50,6 +61,9 @@ LEDStrip& LEDStrip::operator=(const LEDStrip& other) {
         is_initialized = other.is_initialized;
         previousColor = other.previousColor;
         temporalAlpha = other.temporalAlpha;
+        channelScaleR = other.channelScaleR;
+        channelScaleG = other.channelScaleG;
+        channelScaleB = other.channelScaleB;
     }
     return *this;
 }
@@ -59,6 +73,9 @@ LEDStrip::LEDStrip(LEDStrip&& other) noexcept
     is_initialized = other.is_initialized;
     other.is_initialized = false;
     memset(&other.ledstring, 0, sizeof(ws2811_t));
+    channelScaleR = other.channelScaleR;
+    channelScaleG = other.channelScaleG;
+    channelScaleB = other.channelScaleB;
 }
 
 LEDStrip& LEDStrip::operator=(LEDStrip&& other) noexcept {
@@ -70,6 +87,9 @@ LEDStrip& LEDStrip::operator=(LEDStrip&& other) noexcept {
         is_initialized = other.is_initialized;
         previousColor = std::move(other.previousColor);
         temporalAlpha = other.temporalAlpha;
+        channelScaleR = other.channelScaleR;
+        channelScaleG = other.channelScaleG;
+        channelScaleB = other.channelScaleB;
         
         other.is_initialized = false;
         memset(&other.ledstring, 0, sizeof(ws2811_t));
@@ -134,13 +154,16 @@ void LEDStrip::updateStrip(const std::vector<cv::Vec3b>& colors, bool temporalSm
 
         uint8_t outR, outG, outB;
         if (temporalSmoothOn) {
-            outR = static_cast<uint8_t>(std::round(temporalSmooth(newColor[2], prevColor[2])));
-            outG = static_cast<uint8_t>(std::round(temporalSmooth(newColor[1], prevColor[1])));
-            outB = static_cast<uint8_t>(std::round(temporalSmooth(newColor[0], prevColor[0])));
+            float scaledR = temporalSmooth(newColor[2] * channelScaleR, prevColor[2]);
+            float scaledG = temporalSmooth(newColor[1] * channelScaleG, prevColor[1]);
+            float scaledB = temporalSmooth(newColor[0] * channelScaleB, prevColor[0]);
+            outR = static_cast<uint8_t>(std::round(std::clamp(scaledR, 0.0f, 255.0f)));
+            outG = static_cast<uint8_t>(std::round(std::clamp(scaledG, 0.0f, 255.0f)));
+            outB = static_cast<uint8_t>(std::round(std::clamp(scaledB, 0.0f, 255.0f)));
         } else {
-            outR = newColor[2];
-            outG = newColor[1];
-            outB = newColor[0];
+            outR = static_cast<uint8_t>(std::round(std::clamp(newColor[2] * channelScaleR, 0.0f, 255.0f)));
+            outG = static_cast<uint8_t>(std::round(std::clamp(newColor[1] * channelScaleG, 0.0f, 255.0f)));
+            outB = static_cast<uint8_t>(std::round(std::clamp(newColor[0] * channelScaleB, 0.0f, 255.0f)));
         }
 
         ledstring.channel[0].leds[i] = ((uint32_t)outR << 16) | ((uint32_t)outG << 8) | (uint32_t)outB;
@@ -150,9 +173,14 @@ void LEDStrip::updateStrip(const std::vector<cv::Vec3b>& colors, bool temporalSm
 
 void LEDStrip::updateStripWithGamma(const std::vector<cv::Vec3b>& colors, bool temporalSmoothOn) {
     for (size_t i = 0; i < colors.size() && i < (size_t)ledstring.channel[0].count; ++i) {
-        uint8_t newB = gamma8[colors[i][0]];
-        uint8_t newG = gamma8[colors[i][1]];
-        uint8_t newR = gamma8[colors[i][2]];
+        // Apply per-channel scaling before gamma lookup
+        int scaledB_in = static_cast<int>(std::round(std::clamp(colors[i][0] * channelScaleB, 0.0f, 255.0f)));
+        int scaledG_in = static_cast<int>(std::round(std::clamp(colors[i][1] * channelScaleG, 0.0f, 255.0f)));
+        int scaledR_in = static_cast<int>(std::round(std::clamp(colors[i][2] * channelScaleR, 0.0f, 255.0f)));
+
+        uint8_t newB = gamma8[scaledB_in];
+        uint8_t newG = gamma8[scaledG_in];
+        uint8_t newR = gamma8[scaledR_in];
 
         cv::Vec3b& prevColor = previousColor[i];
 
@@ -170,6 +198,12 @@ void LEDStrip::updateStripWithGamma(const std::vector<cv::Vec3b>& colors, bool t
         ledstring.channel[0].leds[i] = ((uint32_t)outR << 16) | ((uint32_t)outG << 8) | (uint32_t)outB;
         previousColor[i] = cv::Vec3b(outB, outG, outR);
     }
+}
+
+void LEDStrip::setChannelScales(float r_scale, float g_scale, float b_scale) {
+    channelScaleR = std::clamp(r_scale, 0.0f, 1.0f);
+    channelScaleG = std::clamp(g_scale, 0.0f, 1.0f);
+    channelScaleB = std::clamp(b_scale, 0.0f, 1.0f);
 }
 
 void LEDStrip::setBrightness(int brightness) {
@@ -223,3 +257,7 @@ const uint8_t LEDStrip::gamma8[] = {
   176,178,180,182,184,186,188,191,193,195,197,199,202,204,206,209,
   211,213,215,218,220,223,225,227,230,232,235,237,240,242,245,247
 };
+
+const uint8_t* LEDStrip::getGammaTable() {
+    return gamma8;
+}
